@@ -1,0 +1,221 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<title>cannon.js Demo</title>
+<style type="text/css">
+*{
+margin:0;
+padding:0;
+}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script type="text/javascript" src="orbitControls.js"></script>
+<script type="text/javascript">
+var canvas = document.getElementById("canvas");
+var objs2Update = [];
+
+var world = new CANNON.World();
+world.broadphase = new CANNON.SAPBroadphase(world);
+world.allowSleep = true;
+world.gravity.set(0,-9.82,0);
+
+var defaultMaterial = new CANNON.Material("default");
+var defaultContactMaterial = new CANNON.ContactMaterial(defaultMaterial,defaultMaterial,{
+	friction:0.2,
+	restitution:0.5
+});
+world.defaultContactMaterial = defaultContactMaterial;
+
+function resize(){
+	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.setPixelRatio(Math.min(2,window.devicePixelRatio));
+}
+
+var scene = new THREE.Scene();
+
+var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+scene.add(camera);
+camera.position.z = 20;
+camera.position.y = 5;
+
+var renderer = new THREE.WebGLRenderer({canvas:canvas});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+
+window.addEventListener("load",function(){animate(0)});
+window.addEventListener("resize",function(){
+	resize();
+	renderer.render(scene,camera);
+});
+
+var aLight = new THREE.AmbientLight(0xffffff,0.4);
+scene.add(aLight);
+
+var dLight = new THREE.DirectionalLight(0xffffff,0.3);
+dLight.position.set(6,10,0);
+dLight.castShadow = true;
+dLight.shadow.camera.far = 20;
+dLight.shadow.camera.top = dLight.shadow.camera.right = 10;
+dLight.shadow.camera.bottom = dLight.shadow.camera.left = -10;
+dLight.shadow.mapSize.set(512,512)
+scene.add(dLight);
+
+/*var dLightCH = new THREE.CameraHelper(dLight.shadow.camera);
+scene.add(dLightCH);*/
+
+var boxesGeo = new THREE.BoxBufferGeometry(1,1,1);
+var boxesMat = new THREE.MeshLambertMaterial({color:0xffaaaa});
+
+function addBox(w,h,d,mass,pos){
+	var mesh = new THREE.Mesh(
+		boxesGeo,
+		boxesMat
+	);
+	boxesMat = new THREE.MeshLambertMaterial();
+	boxesMat.color = randomColor();
+	mesh.scale.set(w,h,d);
+	if(!pos){
+		pos = {
+			x:Math.random()*10-5,
+			y:6,
+			z: Math.random()*10-5
+		};
+	}
+	mesh.position.set(pos.x,pos.y,pos.z);
+	mesh.castShadow = true;
+	scene.add(mesh);
+	if(mass == undefined || mass == null){mass=1;}
+	else{mesh.receiveShadow=true;mesh.castShdow = false;}
+	var body = new CANNON.Body({
+		mass:mass,
+		position:new CANNON.Vec3(pos.x,pos.y,pos.z),
+		shape: new CANNON.Box(new CANNON.Vec3(w*0.5,h*0.5,d*0.5)),
+		/*material:defaulMaterial*/
+	});
+	world.add(body);
+	objs2Update.push({mesh,body});
+}
+
+var spheresGeo = new THREE.SphereBufferGeometry(1,20,20);
+var spheresMat = new THREE.MeshLambertMaterial({color:0xaaffaa});
+
+function addSphere(radius){
+	var mesh = new THREE.Mesh(
+		spheresGeo,
+		spheresMat
+	);
+	mesh.material.side = THREE.DoubleSide;
+	spheresMat = new THREE.MeshLambertMaterial();
+	spheresMat.color = randomColor();
+	mesh.scale.set(radius,radius,radius);
+	var rndX = Math.random()*10-5;
+	var rndY = 6;
+	var rndZ = Math.random()*10-5;
+	mesh.position.set(rndX,rndY,rndZ);
+	mesh.castShadow = true;
+	scene.add(mesh);
+	var body = new CANNON.Body({
+		mass:radius*radius*radius,
+		position:new CANNON.Vec3(rndX,rndY,rndZ),
+		shape: new CANNON.Sphere(radius),
+		/*material:defaulMaterial*/
+	});
+	world.add(body);
+	objs2Update.push({mesh,body});
+}
+setInterval(()=>{addBox(Math.random()+0.5,Math.random()+0.5,Math.random()+0.5);},500);
+setInterval(()=>{addSphere(Math.random()+0.4);},400);
+
+var planeMesh = new THREE.Mesh(
+	new THREE.BoxGeometry(10,8,1),
+	new THREE.MeshLambertMaterial({color:0xffffff})
+);
+planeMesh.material.side = THREE.DoubleSide;
+planeMesh.position.set(0,6,0);
+scene.add(planeMesh);
+
+var planeBody = new CANNON.Body();
+planeBody.mass = 0;
+planeBody.addShape(new CANNON.Box(new CANNON.Vec3(5,4,.5)));
+planeBody.position.set(0,6,0);
+//planeBody.quaternion.setFromAxisAngle(new CANNON.Vec3(-1,0,0),Math.PI*0.5);
+world.add(planeBody);
+objs2Update.push({mesh:planeMesh,body:planeBody});
+
+addBox(10,0.5,10,0,new CANNON.Vec3(0,0,0));
+addBox(0.5,1,10,0,new CANNON.Vec3(4.75,0.75,0));
+addBox(0.5,1,10,0,new CANNON.Vec3(-4.75,0.75,0));
+addBox(9,1,0.5,0,new CANNON.Vec3(0,0.75,4.75));
+addBox(9,1,0.5,0,new CANNON.Vec3(0,0.75,-4.75));
+
+var axesHelper = new THREE.AxesHelper(20);
+scene.add(axesHelper);
+
+var controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.update();
+
+
+function randomColor(){
+	var chars = "0123456789abcdef";
+	var str = "#";
+	for(var i=0;i<6;i++){
+		str += chars.charAt(Math.floor(Math.random() * chars.length));
+	}
+	return new THREE.Color(str)
+}
+
+renderer.render(scene,camera);
+
+
+planeBody.logIt = function(obj){
+	if(!obj){obj = planeBody}
+	for(var el in obj){
+		if(typeof obj[el] == "object"){
+			console.log(el,":{");
+		//	planeBody.logIt(obj[el]);
+			console.log("}");
+		}
+		else{
+			console.log(el,":",obj[el]);
+		}
+		
+	}
+
+}
+
+
+var ot = 0;
+planeBody.logIt();
+function animate(et=0){
+	var dt = et-ot;
+	ot = et;
+	renderer.render(scene,camera);
+	controls.update();
+	world.step(1/60,dt,3);
+//	planeBody.velocity.z = -Math.sin(et * 0.0003) * 10 * 0.0003;
+//	planeMesh.position.copy(planeBody.position);
+	for(var i=0;i<objs2Update.length;i++){
+		objs2Update[i].mesh.position.copy(objs2Update[i].body.position);
+		objs2Update[i].mesh.quaternion.copy(objs2Update[i].body.quaternion);
+	}
+	for(var i=0;i<objs2Update.length;i++){
+		if(objs2Update[i].body.position.y<-10){
+			scene.remove(objs2Update[i].mesh);
+			world.remove(objs2Update[i].body);
+			objs2Update.splice(i,1);
+			i--;
+		}
+	}
+	requestAnimationFrame(animate);
+}
+
+</script>
+</body>
+</html>
